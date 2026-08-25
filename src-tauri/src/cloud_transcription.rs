@@ -9,7 +9,7 @@ use crate::settings::AppSettings;
 use anyhow::{anyhow, Result};
 use log::{debug, info};
 use serde::Deserialize;
-use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 /// Provider id shared with post-processing: cloud transcription reuses the
@@ -25,10 +25,12 @@ struct TranscriptionResponse {
 
 /// Transcribe `samples` (16 kHz mono PCM) with an OpenAI-hosted model.
 ///
-/// Blocking. Callers already sit on threads that block on engine compute
-/// (including inside async tasks — see actions.rs), so the request is spawned
-/// onto Tauri's runtime and awaited through a channel; `block_on` would panic
-/// in that async context.
+/// Blocking. The dictation caller sits INSIDE a tokio worker task (see
+/// actions.rs), so the request must never be spawned onto that runtime and
+/// awaited here: a task spawned from a worker can land in the worker's
+/// non-stealable LIFO slot, and blocking the worker then strands the request
+/// unpolled — the transcription spinner runs forever. A dedicated OS thread
+/// with reqwest's blocking client has no dependency on the app runtime.
 pub fn transcribe_openai(settings: &AppSettings, model: &str, samples: &[f32]) -> Result<String> {
     let provider = settings
         .post_process_provider(OPENAI_PROVIDER_ID)
@@ -70,25 +72,22 @@ pub fn transcribe_openai(settings: &AppSettings, model: &str, samples: &[f32]) -
     // initial prompt.
     let prompt = (!settings.custom_words.is_empty()).then(|| settings.custom_words.join(", "));
 
-    let (tx, rx) = mpsc::channel();
-    tauri::async_runtime::spawn(async move {
-        let _ = tx.send(request_transcription(url, api_key, model, wav, prompt).await);
-    });
-    rx.recv()
-        .map_err(|_| anyhow!("Cloud transcription task ended without a response"))?
+    thread::spawn(move || request_transcription(url, api_key, model, wav, prompt))
+        .join()
+        .map_err(|_| anyhow!("Cloud transcription thread panicked"))?
 }
 
-async fn request_transcription(
+fn request_transcription(
     url: String,
     api_key: String,
     model: String,
     wav: Vec<u8>,
     prompt: Option<String>,
 ) -> Result<String> {
-    let part = reqwest::multipart::Part::bytes(wav)
+    let part = reqwest::blocking::multipart::Part::bytes(wav)
         .file_name("audio.wav")
         .mime_str("audio/wav")?;
-    let mut form = reqwest::multipart::Form::new()
+    let mut form = reqwest::blocking::multipart::Form::new()
         .part("file", part)
         .text("model", model)
         .text("response_format", "json");
@@ -96,25 +95,24 @@ async fn request_transcription(
         form = form.text("prompt", prompt);
     }
 
-    let client = reqwest::Client::builder()
+    let client = reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()?;
     let response = client
         .post(&url)
         .bearer_auth(api_key)
         .multipart(form)
-        .send()
-        .await?;
+        .send()?;
 
     let status = response.status();
     if !status.is_success() {
         // Provider error bodies are short JSON error messages; they never
         // contain audio or transcription content, so they are safe to surface.
-        let body = response.text().await.unwrap_or_default();
+        let body = response.text().unwrap_or_default();
         return Err(anyhow!("Cloud transcription failed ({}): {}", status, body));
     }
 
-    let parsed: TranscriptionResponse = response.json().await?;
+    let parsed: TranscriptionResponse = response.json()?;
     info!(
         "Cloud transcription completed ({} chars)",
         parsed.text.len()
