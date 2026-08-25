@@ -27,6 +27,25 @@ pub fn verify_wav_file<P: AsRef<Path>>(file_path: P, expected_samples: usize) ->
     Ok(())
 }
 
+/// Encode audio samples as an in-memory 16 kHz mono 16-bit WAV.
+pub fn wav_bytes(samples: &[f32]) -> Result<Vec<u8>> {
+    let spec = WavSpec {
+        channels: 1,
+        sample_rate: 16000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    let mut writer = WavWriter::new(&mut cursor, spec)?;
+    for sample in samples {
+        writer.write_sample((sample * i16::MAX as f32) as i16)?;
+    }
+    writer.finalize()?;
+
+    Ok(cursor.into_inner())
+}
+
 /// Save audio samples as a WAV file
 pub fn save_wav_file<P: AsRef<Path>>(file_path: P, samples: &[f32]) -> Result<()> {
     let spec = WavSpec {

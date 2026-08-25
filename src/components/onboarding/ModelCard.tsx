@@ -45,6 +45,10 @@ const getLanguageDisplayText = (
 export const isLegacySource = (model: ModelInfo): boolean =>
   typeof model.source === "object" && "Url" in model.source;
 
+// Cloud = an API-hosted proprietary model: nothing on disk, needs an API key.
+export const isCloudSource = (model: ModelInfo): boolean =>
+  model.source === "Cloud";
+
 // Extract a GGUF quantization label from a filename, if present (e.g. "Q8_0").
 const getQuantLabel = (filename: string): string | null => {
   const match = filename.match(
@@ -104,7 +108,10 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const displayName = getTranslatedModelName(model, t);
   const displayDescription = getTranslatedModelDescription(model, t);
   const showModelSize =
-    status === "downloadable" || status === "available" || status === "active";
+    !isCloudSource(model) &&
+    (status === "downloadable" ||
+      status === "available" ||
+      status === "active");
   const formattedModelSize = formatModelSize(Number(model.size_mb));
   const quantLabel = getQuantLabel(model.filename);
   const capabilityLanguages = getUniqueCapabilityLanguages(
@@ -184,6 +191,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
             )}
             {isLegacySource(model) && (
               <Badge variant="secondary">{t("modelSelector.legacy")}</Badge>
+            )}
+            {isCloudSource(model) && (
+              <Badge variant="secondary">{t("modelSelector.cloud")}</Badge>
             )}
             {status === "switching" && (
               <Badge variant="secondary">
@@ -274,18 +284,20 @@ const ModelCard: React.FC<ModelCardProps> = ({
             )}
           </span>
         )}
-        {onDelete && (status === "available" || status === "active") && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDelete}
-            title={t("modelSelector.deleteModel", { modelName: displayName })}
-            className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{t("common.delete")}</span>
-          </Button>
-        )}
+        {onDelete &&
+          !isCloudSource(model) &&
+          (status === "available" || status === "active") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              title={t("modelSelector.deleteModel", { modelName: displayName })}
+              className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{t("common.delete")}</span>
+            </Button>
+          )}
       </div>
 
       {/* Download/extract progress */}

@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
+import { ApiKeyField } from "@/components/settings/PostProcessingSettingsApi/ApiKeyField";
+import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import {
   getLanguageLabel,
@@ -41,6 +43,9 @@ export const ModelsSettings: React.FC = () => {
   const [languageSearch, setLanguageSearch] = useState("");
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const languageSearchInputRef = useRef<HTMLInputElement>(null);
+  // Cloud models reuse the OpenAI key from the post-processing providers.
+  const { settings, updatePostProcessApiKey } = useSettings();
+  const openAiApiKey = settings?.post_process_api_keys?.openai ?? "";
   const {
     models,
     currentModel,
@@ -447,6 +452,22 @@ export const ModelsSettings: React.FC = () => {
             {t("settings.models.noModelsMatch")}
           </div>
         )}
+
+        {/* Cloud transcription API key (shared with the OpenAI post-processing provider) */}
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium text-text/60">
+            {t("settings.models.cloud.title")}
+          </h2>
+          <p className="text-sm text-text/60">
+            {t("settings.models.cloud.description")}
+          </p>
+          <ApiKeyField
+            value={openAiApiKey}
+            onBlur={(value) => updatePostProcessApiKey("openai", value)}
+            disabled={false}
+            placeholder={t("settings.models.cloud.apiKeyPlaceholder")}
+          />
+        </div>
       </div>
     </div>
   );

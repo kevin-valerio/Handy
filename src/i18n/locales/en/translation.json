@@ -123,6 +123,7 @@
   "modelSelector": {
     "custom": "Custom",
     "legacy": "Legacy",
+    "cloud": "Cloud",
     "streaming": "Streaming",
     "active": "Active",
     "switching": "Switching...",
@@ -217,7 +218,12 @@
         "label": "Rescan",
         "tooltip": "Rescan for models added to the models folder or Hugging Face cache outside Handy"
       },
-      "noModelsMatch": "No models match this filter."
+      "noModelsMatch": "No models match this filter.",
+      "cloud": {
+        "title": "Cloud transcription (OpenAI)",
+        "description": "Cloud models send your recording to the OpenAI API and need an API key. The key is stored on this device and is shared with the OpenAI post-processing provider.",
+        "apiKeyPlaceholder": "OpenAI API key"
+      }
     },
     "sound": {
       "title": "Sound",

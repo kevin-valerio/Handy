@@ -7,6 +7,7 @@ mod autostart;
 mod catalog;
 pub mod cli;
 mod clipboard;
+mod cloud_transcription;
 mod commands;
 mod helpers;
 mod input;

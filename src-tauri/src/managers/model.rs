@@ -36,6 +36,9 @@ pub enum EngineType {
     GigaAM,
     Canary,
     Cohere,
+    /// OpenAI-hosted transcription model, called over HTTPS with the user's
+    /// API key. No local inference; see `crate::cloud_transcription`.
+    OpenAi,
 }
 
 /// Where a model comes from and how Handy obtains it — the routing discriminant
@@ -55,6 +58,8 @@ pub enum ModelSource {
     /// Already present on disk — a user-provided custom model, or one discovered
     /// in a shared cache. Nothing to download.
     Local,
+    /// Served by a provider's HTTP API. Nothing on disk; always "downloaded".
+    Cloud,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -1105,6 +1110,76 @@ impl ModelManager {
             },
         );
 
+        // OpenAI cloud transcription models (proprietary; the recording is sent
+        // to the OpenAI API with the user's key). `filename` carries the
+        // provider-side model name; nothing lives on disk, so they are always
+        // "downloaded". Speed scores reflect API round-trip, not local compute.
+        let openai_cloud_model = |id: &str,
+                                  name: &str,
+                                  description: &str,
+                                  remote_model: &str,
+                                  accuracy_score: f32,
+                                  speed_score: f32| ModelInfo {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: description.to_string(),
+            filename: remote_model.to_string(),
+            source: ModelSource::Cloud,
+            size_mb: 0,
+            is_downloaded: true,
+            is_downloading: false,
+            partial_size: 0,
+            is_directory: false,
+            engine_type: EngineType::OpenAi,
+            accuracy_score,
+            speed_score,
+            supports_translation: false,
+            is_recommended: false,
+            // Multilingual with server-side auto-detection; no language hint is
+            // sent, so no explicit language picker is offered.
+            supported_languages: Vec::new(),
+            supports_language_selection: false,
+            is_custom: false,
+            supports_streaming: false,
+            supports_language_detection: true,
+        };
+
+        available_models.insert(
+            "openai-gpt-transcribe".to_string(),
+            openai_cloud_model(
+                "openai-gpt-transcribe",
+                "GPT Transcribe",
+                "OpenAI's newest hosted model. Most accurate. Needs an API key.",
+                "gpt-transcribe",
+                0.95,
+                0.70,
+            ),
+        );
+
+        available_models.insert(
+            "openai-gpt-4o-transcribe".to_string(),
+            openai_cloud_model(
+                "openai-gpt-4o-transcribe",
+                "GPT-4o Transcribe",
+                "OpenAI hosted, very accurate. Needs an API key.",
+                "gpt-4o-transcribe",
+                0.90,
+                0.70,
+            ),
+        );
+
+        available_models.insert(
+            "openai-gpt-4o-mini-transcribe".to_string(),
+            openai_cloud_model(
+                "openai-gpt-4o-mini-transcribe",
+                "GPT-4o Mini Transcribe",
+                "OpenAI hosted, cheaper and fast. Needs an API key.",
+                "gpt-4o-mini-transcribe",
+                0.85,
+                0.80,
+            ),
+        );
+
         // Seed the bundled offline catalog before the on-disk scans, so a model
         // already in the HF cache dedups onto its richer catalog entry (the scans
         // only insert ids not already present) instead of showing as a bare cache
@@ -1370,6 +1445,13 @@ impl ModelManager {
         let mut vanished_alternates: Vec<String> = Vec::new();
 
         for model in models.values_mut() {
+            if matches!(model.source, ModelSource::Cloud) {
+                // Cloud models have no local files; they are always available.
+                model.is_downloaded = true;
+                model.is_downloading = false;
+                model.partial_size = 0;
+                continue;
+            }
             if let ModelSource::HuggingFace { repo_id, revision } = &model.source {
                 // A models-dir copy counts too: mirror-fallback downloads land
                 // there, and it makes manual drop-ins of catalog files work.
@@ -1505,12 +1587,13 @@ impl ModelManager {
         }
 
         // If no model is selected, pick the first downloaded one using the same
-        // ranked order the UI receives.
+        // ranked order the UI receives. Cloud models are skipped: they count as
+        // "downloaded" but need an API key the user may not have configured.
         if settings.selected_model.is_empty() {
             if let Some(available_model) = self
                 .get_available_models()
                 .into_iter()
-                .find(|model| model.is_downloaded)
+                .find(|model| model.is_downloaded && !matches!(model.source, ModelSource::Cloud))
             {
                 info!(
                     "Auto-selecting model: {} ({})",
@@ -2169,6 +2252,11 @@ impl ModelManager {
             ModelSource::Local => {
                 return Err(anyhow::anyhow!("No download source for model"));
             }
+            ModelSource::Cloud => {
+                return Err(anyhow::anyhow!(
+                    "Cloud models are used via API and are not downloaded"
+                ));
+            }
         };
         let model_path = self.models_dir.join(&model_info.filename);
         let partial_path = self
@@ -2360,6 +2448,12 @@ impl ModelManager {
             model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
 
         debug!("ModelManager: Found model info: {:?}", model_info);
+
+        if matches!(model_info.source, ModelSource::Cloud) {
+            return Err(anyhow::anyhow!(
+                "Cloud models have no local files to delete"
+            ));
+        }
 
         if let ModelSource::HuggingFace { repo_id, revision } = &model_info.source {
             let is_alternate_quant =

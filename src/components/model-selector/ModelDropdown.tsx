@@ -55,6 +55,11 @@ const ModelDropdown: React.FC<ModelDropdownProps> = ({
                         {t("modelSelector.custom")}
                       </span>
                     )}
+                    {model.source === "Cloud" && (
+                      <span className="ms-1.5 text-[10px] font-medium text-text/40 uppercase">
+                        {t("modelSelector.cloud")}
+                      </span>
+                    )}
                     {model.supports_streaming && (
                       <span className="ms-1.5 text-[10px] font-medium text-logo-primary/70 uppercase">
                         {t("modelSelector.streaming")}

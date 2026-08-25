@@ -188,6 +188,11 @@ enum LoadedEngine {
     GigaAM(GigaAMModel),
     Canary(CanaryModel),
     Cohere(CohereModel),
+    /// OpenAI-hosted model: a per-request HTTPS call, no local engine state.
+    /// Holds the provider-side model name (e.g. "gpt-4o-transcribe").
+    OpenAi {
+        model: String,
+    },
 }
 
 /// RAII guard that clears the `is_loading` flag and notifies waiters on drop.
@@ -517,7 +522,11 @@ impl TranscriptionManager {
             return Err(anyhow::anyhow!(error_msg));
         }
 
-        let model_path = self.model_manager.get_model_path(model_id)?;
+        // Cloud models have no file on disk; every local engine resolves one.
+        let model_path = match model_info.engine_type {
+            EngineType::OpenAi => std::path::PathBuf::new(),
+            _ => self.model_manager.get_model_path(model_id)?,
+        };
 
         // Drop the current engine BEFORE building the new one so transcribe-cpp
         // frees the previous native context first — avoids holding two models at
@@ -695,6 +704,15 @@ impl TranscriptionManager {
                 })?;
                 LoadedEngine::Cohere(engine)
             }
+            EngineType::OpenAi => {
+                info!(
+                    "Using OpenAI cloud transcription (remote model '{}')",
+                    model_info.filename
+                );
+                LoadedEngine::OpenAi {
+                    model: model_info.filename.clone(),
+                }
+            }
         };
 
         // Update the current engine and model ID
@@ -775,6 +793,7 @@ impl TranscriptionManager {
             Some(LoadedEngine::TranscribeCpp(session)) => {
                 Some(session.model().backend().to_string())
             }
+            Some(LoadedEngine::OpenAi { .. }) => Some("openai-api".to_string()),
             Some(_) => Some("onnx".to_string()),
             None => None,
         }
@@ -1418,6 +1437,15 @@ impl TranscriptionManager {
                             .transcribe(&audio, &options)
                             .map(|r| r.text)
                             .map_err(|e| anyhow::anyhow!("Cohere transcription failed: {}", e))
+                    }
+                    LoadedEngine::OpenAi { model } => {
+                        // Custom words travel as the request prompt (same
+                        // contract as the whisper initial prompt), so skip the
+                        // fuzzy re-correction pass below.
+                        if !settings.custom_words.is_empty() {
+                            model_is_whisper = true;
+                        }
+                        crate::cloud_transcription::transcribe_openai(&settings, model, &audio)
                     }
                 }
             }));
