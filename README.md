@@ -8,9 +8,11 @@ proprietary cloud transcription models next to the local ones.
 
 The model list in Settings → Models includes OpenAI's hosted transcription models
 (`gpt-transcribe`, `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`). Select one and
-paste your OpenAI API key in the "Cloud transcription" section of the same page.
-The key is stored locally in Handy's settings store and is shared with the OpenAI
-post-processing provider; it is never committed to this repository.
+paste your OpenAI API key in the "Cloud transcription" section of the same page,
+or simply export `OPENAI_API_KEY` in the environment Handy is launched from (a key
+entered in Settings wins over the variable). The settings key is stored locally in
+Handy's settings store and is shared with the OpenAI post-processing provider; no
+key is ever committed to this repository.
 
 When a cloud model is selected, the recorded audio is encoded as WAV and sent to
 the OpenAI `/v1/audio/transcriptions` endpoint. Everything else (shortcuts, VAD,

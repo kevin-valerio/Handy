@@ -33,14 +33,23 @@ pub fn transcribe_openai(settings: &AppSettings, model: &str, samples: &[f32]) -
     let provider = settings
         .post_process_provider(OPENAI_PROVIDER_ID)
         .ok_or_else(|| anyhow!("OpenAI provider is not configured"))?;
+    // A key entered in Settings wins; otherwise fall back to the OPENAI_API_KEY
+    // environment variable, so the key never has to be stored on disk.
     let api_key = settings
         .post_process_api_keys
         .get(OPENAI_PROVIDER_ID)
         .cloned()
+        .filter(|key| !key.is_empty())
+        .or_else(|| {
+            std::env::var("OPENAI_API_KEY")
+                .ok()
+                .filter(|key| !key.is_empty())
+        })
         .unwrap_or_default();
     if api_key.is_empty() {
         return Err(anyhow!(
-            "No OpenAI API key configured. Add one under Settings → Models → Cloud transcription."
+            "No OpenAI API key configured. Add one under Settings → Models → Cloud \
+             transcription, or export OPENAI_API_KEY in the environment."
         ));
     }
 
