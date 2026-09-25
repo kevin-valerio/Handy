@@ -38,7 +38,7 @@ interface UseSettingsReturn {
   updatePostProcessApiKey: (
     providerId: string,
     apiKey: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updatePostProcessModel: (providerId: string, model: string) => Promise<void>;
   fetchPostProcessModels: (providerId: string) => Promise<string[]>;
 }

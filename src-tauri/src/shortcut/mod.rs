@@ -17,6 +17,7 @@ use log::{debug, error, info, warn};
 use serde::Serialize;
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_store::StoreExt;
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::settings::APPLE_INTELLIGENCE_DEFAULT_MODEL_ID;
@@ -1062,7 +1063,10 @@ pub fn change_post_process_api_key_setting(
     validate_provider_exists(&settings, &provider_id)?;
     settings.post_process_api_keys.insert(provider_id, api_key);
     settings::write_settings(&app, settings);
-    Ok(())
+    app.store(crate::portable::store_path(settings::SETTINGS_STORE_PATH))
+        .map_err(|err| err.to_string())?
+        .save()
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]

@@ -44,7 +44,7 @@ interface SettingsStore {
     settingType: "base_url" | "api_key" | "model",
     providerId: string,
     value: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updatePostProcessBaseUrl: (
     providerId: string,
     baseUrl: string,
@@ -52,7 +52,7 @@ interface SettingsStore {
   updatePostProcessApiKey: (
     providerId: string,
     apiKey: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   updatePostProcessModel: (providerId: string, model: string) => Promise<void>;
   fetchPostProcessModels: (providerId: string) => Promise<string[]>;
   setPostProcessModelOptions: (providerId: string, models: string[]) => void;
@@ -480,19 +480,32 @@ export const useSettingsStore = create<SettingsStore>()(
       setUpdating(updateKey, true);
 
       try {
+        let result;
         if (settingType === "base_url") {
-          await commands.changePostProcessBaseUrlSetting(providerId, value);
+          result = await commands.changePostProcessBaseUrlSetting(
+            providerId,
+            value,
+          );
         } else if (settingType === "api_key") {
-          await commands.changePostProcessApiKeySetting(providerId, value);
-        } else if (settingType === "model") {
-          await commands.changePostProcessModelSetting(providerId, value);
+          result = await commands.changePostProcessApiKeySetting(
+            providerId,
+            value,
+          );
+        } else {
+          result = await commands.changePostProcessModelSetting(
+            providerId,
+            value,
+          );
         }
+        if (result.status !== "ok") return false;
         await refreshSettings();
+        return true;
       } catch (error) {
         console.error(
           `Failed to update post-process ${settingType.replace("_", " ")}:`,
           error,
         );
+        return false;
       } finally {
         setUpdating(updateKey, false);
       }
@@ -556,7 +569,7 @@ export const useSettingsStore = create<SettingsStore>()(
     },
 
     updatePostProcessModel: async (providerId, model) => {
-      return get().updatePostProcessSetting("model", providerId, model);
+      await get().updatePostProcessSetting("model", providerId, model);
     },
 
     fetchPostProcessModels: async (providerId) => {

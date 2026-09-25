@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
-import { ApiKeyField } from "@/components/settings/PostProcessingSettingsApi/ApiKeyField";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useSettings } from "@/hooks/useSettings";
 import { useModelStore } from "@/stores/modelStore";
 import {
@@ -44,8 +45,28 @@ export const ModelsSettings: React.FC = () => {
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const languageSearchInputRef = useRef<HTMLInputElement>(null);
   // Cloud models reuse the OpenAI key from the post-processing providers.
-  const { settings, updatePostProcessApiKey } = useSettings();
+  const { settings, updatePostProcessApiKey, isUpdating } = useSettings();
   const openAiApiKey = settings?.post_process_api_keys?.openai ?? "";
+  const [apiKeyDraft, setApiKeyDraft] = useState(openAiApiKey);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeySaveStatus, setApiKeySaveStatus] = useState<
+    "saved" | "error" | null
+  >(null);
+  const isSavingApiKey = isUpdating("post_process_api_key:openai");
+
+  useEffect(() => {
+    setApiKeyDraft(openAiApiKey);
+  }, [openAiApiKey]);
+
+  const handleApiKeySave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setApiKeySaveStatus(null);
+    const key = apiKeyDraft.trim();
+    const saved = await updatePostProcessApiKey("openai", key);
+    if (saved) setApiKeyDraft(key);
+    setApiKeySaveStatus(saved ? "saved" : "error");
+  };
+
   const {
     models,
     currentModel,
@@ -253,6 +274,69 @@ export const ModelsSettings: React.FC = () => {
         </p>
       </div>
 
+      <form
+        onSubmit={handleApiKeySave}
+        className="space-y-3 rounded-lg border border-mid-gray/20 p-4"
+      >
+        <h2 className="text-sm font-medium">
+          {t("settings.models.cloud.title")}
+        </h2>
+        <p className="text-sm text-text/60">
+          {t("settings.models.cloud.description")}
+        </p>
+        <label htmlFor="openai-api-key" className="block text-sm font-medium">
+          {t("settings.models.cloud.apiKeyPlaceholder")}
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id="openai-api-key"
+            type={showApiKey ? "text" : "password"}
+            value={apiKeyDraft}
+            onChange={(event) => {
+              setApiKeyDraft(event.target.value);
+              setApiKeySaveStatus(null);
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={!settings || isSavingApiKey}
+            placeholder={t("settings.models.cloud.apiKeyPlaceholder")}
+            className="min-w-0 flex-1"
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setShowApiKey(!showApiKey)}
+            aria-controls="openai-api-key"
+            aria-pressed={showApiKey}
+          >
+            {t(
+              showApiKey
+                ? "settings.models.cloud.hide"
+                : "settings.models.cloud.show",
+            )}
+          </Button>
+          <Button type="submit" disabled={!settings || isSavingApiKey}>
+            {t(
+              isSavingApiKey
+                ? "settings.models.cloud.saving"
+                : "settings.models.cloud.save",
+            )}
+          </Button>
+        </div>
+        {apiKeySaveStatus && (
+          <p
+            role={apiKeySaveStatus === "error" ? "alert" : "status"}
+            className={`text-sm ${apiKeySaveStatus === "error" ? "text-red-500" : "text-text/60"}`}
+          >
+            {t(
+              apiKeySaveStatus === "saved"
+                ? "settings.models.cloud.saved"
+                : "settings.models.cloud.saveError",
+            )}
+          </p>
+        )}
+      </form>
+
       {/* Search bar — filter the catalog by name or description */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text/40 pointer-events-none" />
@@ -454,22 +538,6 @@ export const ModelsSettings: React.FC = () => {
             {t("settings.models.noModelsMatch")}
           </div>
         )}
-
-        {/* Cloud transcription API key (shared with the OpenAI post-processing provider) */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-text/60">
-            {t("settings.models.cloud.title")}
-          </h2>
-          <p className="text-sm text-text/60">
-            {t("settings.models.cloud.description")}
-          </p>
-          <ApiKeyField
-            value={openAiApiKey}
-            onBlur={(value) => updatePostProcessApiKey("openai", value)}
-            disabled={false}
-            placeholder={t("settings.models.cloud.apiKeyPlaceholder")}
-          />
-        </div>
       </div>
     </div>
   );

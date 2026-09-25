@@ -231,7 +231,13 @@
       "cloud": {
         "title": "Cloud transcription (OpenAI)",
         "description": "Cloud models send your recording to the OpenAI API and need an API key. The key is stored on this device and is shared with the OpenAI post-processing provider.",
-        "apiKeyPlaceholder": "OpenAI API key"
+        "apiKeyPlaceholder": "OpenAI API key",
+        "show": "Show",
+        "hide": "Hide",
+        "save": "Save",
+        "saving": "Saving…",
+        "saved": "API key saved.",
+        "saveError": "Could not save the API key. Try again."
       }
     },
     "sound": {

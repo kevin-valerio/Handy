@@ -1,5 +1,10 @@
 # AGENTS.md
 
+**This is a fork of Handy !!! the goal is to have propriatory models inside not only local
+so like OpenAI etc **
+
+---
+
 This file provides guidance to AI coding assistants working with code in this repository.
 
 ## Development Commands
