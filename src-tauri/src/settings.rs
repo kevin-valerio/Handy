@@ -505,7 +505,7 @@ fn default_settings_schema_version() -> u32 {
 }
 
 fn default_push_to_talk() -> bool {
-    true
+    false
 }
 
 fn default_always_on_microphone() -> bool {
@@ -1197,7 +1197,7 @@ mod tests {
     fn empty_store_parses_with_defaults() {
         let settings: AppSettings = serde_json::from_value(serde_json::json!({}))
             .expect("all AppSettings fields need serde defaults");
-        assert!(settings.push_to_talk);
+        assert!(!settings.push_to_talk);
         assert!(!settings.audio_feedback);
         assert!(settings.filler_word_removal_enabled);
         // Bindings default to empty; the load path merges the real defaults in.
